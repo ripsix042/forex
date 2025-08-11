@@ -1,3 +1,18 @@
 fastapi
 uvicorn
 python-multipart
+python-dotenv
+numpy
+pandas
+pillow
+requests
+matplotlib
+# Optional dependencies that can be installed manually if needed
+# openai
+# pinecone-client
+# pytesseract
+# yt-dlp
+# whisper
+# langchain
+# faiss-cpu
+# sentence-transformers

@@ -5,10 +5,17 @@ interface FileUploadProps {
   onUpload: (result: any) => void;
 }
 
+interface FileInfo {
+  filename: string;
+  size: number;
+  processed: boolean;
+  date_modified: number;
+}
+
 const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string>('');
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<FileInfo[]>([]);
   const [fileType, setFileType] = useState<string>('video');
 
   const fetchFiles = async () => {
@@ -97,16 +104,16 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
         <h3 className="font-semibold mb-2">Uploaded Resources:</h3>
         {files.length > 0 ? (
           <ul className="divide-y">
-            {files.map((fname) => (
-              <li key={fname} className="py-2 flex items-center">
+            {files.map((fileInfo) => (
+              <li key={fileInfo.filename} className="py-2 flex items-center">
                 <span className="mr-2">
-                  {fname.endsWith('.pdf') ? '📄' : 
-                   fname.endsWith('.mp4') || fname.endsWith('.mov') ? '🎬' : 
-                   fname.endsWith('.jpg') || fname.endsWith('.png') ? '🖼️' : 
-                   fname.endsWith('.csv') ? '📊' : 
-                   fname.endsWith('.xls') || fname.endsWith('.xlsx') ? '📑' : '📁'}
+                  {fileInfo.filename.endsWith('.pdf') ? '📄' : 
+                   fileInfo.filename.endsWith('.mp4') || fileInfo.filename.endsWith('.mov') ? '🎬' : 
+                   fileInfo.filename.endsWith('.jpg') || fileInfo.filename.endsWith('.png') ? '🖼️' : 
+                   fileInfo.filename.endsWith('.csv') ? '📊' : 
+                   fileInfo.filename.endsWith('.xls') || fileInfo.filename.endsWith('.xlsx') ? '📑' : '📁'}
                 </span>
-                {fname}
+                {fileInfo.filename}
               </li>
             ))}
           </ul>
