@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
 from typing import List, Dict, Any, Optional
+import yt_dlp
 
 # Set up paths for imports
 import sys
@@ -75,6 +76,73 @@ async def process_file(file_path: str, file_type: str):
         print(f"Error processing file {file_path}: {str(e)}")
         return False
 
+async def process_youtube_video(url: str, file_type: str = "video"):
+    """Download and process YouTube video in the background"""
+    try:
+        # Configure yt-dlp options
+        ydl_opts = {
+            'format': 'best[height<=720]',  # Download best quality up to 720p
+            'outtmpl': os.path.join(UPLOAD_DIR, '%(title)s.%(ext)s'),
+            'noplaylist': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract video info
+            info = ydl.extract_info(url, download=False)
+            video_title = info.get('title', 'Unknown')
+            
+            # Download the video
+            ydl.download([url])
+            
+            # Find the downloaded file
+            downloaded_file = None
+            for file in os.listdir(UPLOAD_DIR):
+                if video_title.replace('/', '_').replace('\\', '_') in file:
+                    downloaded_file = os.path.join(UPLOAD_DIR, file)
+                    break
+            
+            if downloaded_file and os.path.exists(downloaded_file):
+                # Process the downloaded video file
+                processed_content = content_processor.process_file(downloaded_file, file_type)
+                
+                # Extract knowledge from the processed content
+                if processed_content and "text" in processed_content:
+                    metadata = {
+                        "filename": os.path.basename(downloaded_file),
+                        "content_type": file_type,
+                        "source_url": url,
+                        "video_title": video_title,
+                        "processed_date": processed_content.get("processed_date", ""),
+                        "file_size": os.path.getsize(downloaded_file)
+                    }
+                    
+                    # Extract knowledge and store in vector database
+                    extracted_knowledge = knowledge_extractor.extract_knowledge(
+                        processed_content["text"], metadata
+                    )
+                    
+                    # Save processed results
+                    processed_file_path = os.path.join(
+                        PROCESSED_DIR, 
+                        f"{os.path.basename(downloaded_file)}.json"
+                    )
+                    
+                    with open(processed_file_path, "w") as f:
+                        import json
+                        json.dump({
+                            "processed_content": processed_content,
+                            "extracted_knowledge": extracted_knowledge,
+                            "metadata": metadata
+                        }, f, indent=2)
+                        
+                return {"success": True, "filename": os.path.basename(downloaded_file), "title": video_title}
+            else:
+                return {"success": False, "error": "Failed to download video"}
+                
+    except Exception as e:
+        print(f"Error processing YouTube video {url}: {str(e)}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/upload/")
 async def upload_file(background_tasks: BackgroundTasks, 
                      file: UploadFile = File(...), 
@@ -98,6 +166,26 @@ async def upload_file(background_tasks: BackgroundTasks,
         return {"filename": file.filename, "file_type": file_type, "status": "processing"}
     except Exception as e:
         print(f"Error uploading file: {str(e)}")
+        return {"error": str(e)}, 500
+
+@app.post("/upload-youtube/")
+async def upload_youtube(background_tasks: BackgroundTasks, 
+                        url: str = Form(...), 
+                        file_type: str = Form("video")):
+    try:
+        # Validate YouTube URL
+        if not any(domain in url for domain in ['youtube.com', 'youtu.be']):
+            return {"error": "Invalid YouTube URL"}, 400
+        
+        # Ensure the upload directory exists
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        
+        # Process the YouTube video in the background
+        background_tasks.add_task(process_youtube_video, url, file_type)
+        
+        return {"url": url, "file_type": file_type, "status": "processing"}
+    except Exception as e:
+        print(f"Error processing YouTube URL: {str(e)}")
         return {"error": str(e)}, 500
 
 @app.get("/files/")

@@ -7,11 +7,11 @@ pandas
 pillow
 requests
 matplotlib
+yt-dlp
 # Optional dependencies that can be installed manually if needed
 # openai
 # pinecone-client
 # pytesseract
-# yt-dlp
 # whisper
 # langchain
 # faiss-cpu

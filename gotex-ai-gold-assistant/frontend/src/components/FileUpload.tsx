@@ -1,9 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-
-interface FileUploadProps {
-  onUpload: (result: any) => void;
-}
 
 interface FileInfo {
   filename: string;
@@ -12,113 +7,210 @@ interface FileInfo {
   date_modified: number;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<string>('');
-  const [files, setFiles] = useState<FileInfo[]>([]);
-  const [fileType, setFileType] = useState<string>('video');
+interface UploadResponse {
+  filename?: string;
+  file_type: string;
+  status: string;
+  url?: string;
+  error?: string;
+}
 
-  const fetchFiles = async () => {
-    try {
-      const response = await axios.get('http://localhost:8000/files/');
-      setFiles(response.data.files);
-    } catch (error) {
-      setFiles([]);
-    }
-  };
+// Add props interface
+interface FileUploadProps {
+  onUpload?: (result: any) => void;
+}
+
+// Update component signature
+const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState<string>('');
+  const [uploadMode, setUploadMode] = useState<'file' | 'youtube'>('file');
+  const [fileType, setFileType] = useState<string>('document');
+  const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [files, setFiles] = useState<FileInfo[]>([]);
 
   useEffect(() => {
     fetchFiles();
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/files/');
+      const data = await response.json();
+      setFiles(data.files || []);
+    } catch (error) {
+      console.error('Error fetching files:', error);
     }
   };
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedFile(event.target.files[0]);
+    }
+  };
+
+  const handleYoutubeUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setYoutubeUrl(event.target.value);
+  };
+
+  const handleFileTypeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setFileType(event.target.value);
+  };
+
+  // In the handleUpload function, add calls to onUpload:
   const handleUpload = async () => {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('file_type', fileType);
+    if (uploadMode === 'file' && !selectedFile) {
+      setUploadStatus('Please select a file first.');
+      return;
+    }
+    
+    if (uploadMode === 'youtube' && !youtubeUrl.trim()) {
+      setUploadStatus('Please enter a YouTube URL.');
+      return;
+    }
+
+    setUploadStatus('Uploading...');
 
     try {
-      setStatus('Uploading...');
-      const response = await axios.post('http://localhost:8000/upload/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setStatus(`Success: ${response.data.filename}`);
-      setFile(null);
-      fetchFiles();
-      onUpload(response.data);
+      const formData = new FormData();
+      
+      if (uploadMode === 'file') {
+        formData.append('file', selectedFile!);
+        formData.append('file_type', fileType);
+        
+        const response = await fetch('http://localhost:8000/upload/', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const result: UploadResponse = await response.json();
+        
+        if (response.ok) {
+          setUploadStatus(`File uploaded successfully: ${result.filename}`);
+          setSelectedFile(null);
+          fetchFiles();
+          // Add this line
+          onUpload?.(result);
+        } else {
+          setUploadStatus(`Upload failed: ${result.error || 'Unknown error'}`);
+        }
+      } else {
+        // YouTube upload
+        formData.append('url', youtubeUrl);
+        formData.append('file_type', 'video');
+        
+        const response = await fetch('http://localhost:8000/upload-youtube/', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const result: UploadResponse = await response.json();
+        
+        if (response.ok) {
+          setUploadStatus(`YouTube video processing started: ${result.url}`);
+          setYoutubeUrl('');
+          fetchFiles();
+          // Add this line
+          onUpload?.(result);
+        } else {
+          setUploadStatus(`Upload failed: ${result.error || 'Unknown error'}`);
+        }
+      }
     } catch (error) {
-      setStatus('Upload failed');
+      setUploadStatus(`Upload failed: ${error}`);
     }
   };
 
   return (
-    <div className="p-5 border rounded shadow-md bg-white max-w-md mx-auto mt-8">
-      <h2 className="text-lg font-bold mb-3">Upload Trading Resources</h2>
-      <p className="text-sm text-gray-600 mb-3">Upload educational content about gold trading for analysis and reference.</p>
+    <div className="file-upload">
+      <h2>Upload Content</h2>
       
-      <div className="mb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Content Type</label>
-        <select 
-          value={fileType} 
-          onChange={e => setFileType(e.target.value)} 
-          className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="video">Video</option>
-          <option value="image">Chart/Image</option>
-          <option value="pdf">PDF Document</option>
-          <option value="csv">CSV Data</option>
-          <option value="excel">Excel Spreadsheet</option>
-        </select>
+      {/* Upload Mode Toggle */}
+      <div className="upload-mode-toggle" style={{ marginBottom: '20px' }}>
+        <label style={{ marginRight: '20px' }}>
+          <input
+            type="radio"
+            value="file"
+            checked={uploadMode === 'file'}
+            onChange={(e) => setUploadMode(e.target.value as 'file' | 'youtube')}
+            style={{ marginRight: '5px' }}
+          />
+          Upload File
+        </label>
+        <label>
+          <input
+            type="radio"
+            value="youtube"
+            checked={uploadMode === 'youtube'}
+            onChange={(e) => setUploadMode(e.target.value as 'file' | 'youtube')}
+            style={{ marginRight: '5px' }}
+          />
+          YouTube URL
+        </label>
       </div>
-      
-      <div className="mb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
-        <input 
-          type="file" 
-          onChange={handleFileChange} 
-          className="w-full p-2 border rounded text-sm" 
-        />
-      </div>
-      
-      <button
-        onClick={handleUpload}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50 transition duration-200"
-        disabled={!file}
-      >
-        {file ? `Upload ${file.name}` : 'Select a file'}
-      </button>
-      
-      {status && (
-        <div className={`mt-3 text-sm p-2 rounded ${status.includes('Success') ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-          {status}
+
+      {uploadMode === 'file' ? (
+        <div className="file-upload-section">
+          <input type="file" onChange={handleFileChange} style={{ marginBottom: '10px' }} />
+          <select value={fileType} onChange={handleFileTypeChange} style={{ marginLeft: '10px' }}>
+            <option value="document">Document</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
+          </select>
+        </div>
+      ) : (
+        <div className="youtube-upload-section">
+          <input
+            type="url"
+            placeholder="Enter YouTube URL (e.g., https://www.youtube.com/watch?v=...)"
+            value={youtubeUrl}
+            onChange={handleYoutubeUrlChange}
+            style={{ width: '100%', marginBottom: '10px', padding: '8px' }}
+          />
         </div>
       )}
-      
-      <div className="mt-5 border-t pt-3">
-        <h3 className="font-semibold mb-2">Uploaded Resources:</h3>
-        {files.length > 0 ? (
-          <ul className="divide-y">
-            {files.map((fileInfo) => (
-              <li key={fileInfo.filename} className="py-2 flex items-center">
-                <span className="mr-2">
-                  {fileInfo.filename.endsWith('.pdf') ? '📄' : 
-                   fileInfo.filename.endsWith('.mp4') || fileInfo.filename.endsWith('.mov') ? '🎬' : 
-                   fileInfo.filename.endsWith('.jpg') || fileInfo.filename.endsWith('.png') ? '🖼️' : 
-                   fileInfo.filename.endsWith('.csv') ? '📊' : 
-                   fileInfo.filename.endsWith('.xls') || fileInfo.filename.endsWith('.xlsx') ? '📑' : '📁'}
+
+      <button 
+        onClick={handleUpload} 
+        disabled={uploadMode === 'file' ? !selectedFile : !youtubeUrl.trim()}
+        style={{ 
+          padding: '10px 20px', 
+          backgroundColor: '#007bff', 
+          color: 'white', 
+          border: 'none', 
+          borderRadius: '4px',
+          cursor: 'pointer'
+        }}
+      >
+        {uploadMode === 'file' ? 'Upload File' : 'Process YouTube Video'}
+      </button>
+
+      {uploadStatus && <p className="upload-status" style={{ marginTop: '10px' }}>{uploadStatus}</p>}
+
+      {/* Display uploaded files */}
+      <div className="uploaded-files" style={{ marginTop: '30px' }}>
+        <h3>Uploaded Resources</h3>
+        {files.length === 0 ? (
+          <p>No files uploaded yet.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {files.map((file, index) => (
+              <li key={index} style={{ 
+                padding: '10px', 
+                margin: '5px 0', 
+                backgroundColor: file.processed ? '#d4edda' : '#fff3cd',
+                border: '1px solid #ccc',
+                borderRadius: '4px'
+              }}>
+                <span className="filename" style={{ fontWeight: 'bold' }}>{file.filename}</span>
+                <span className="file-size" style={{ marginLeft: '10px', color: '#666' }}>({(file.size / 1024).toFixed(1)} KB)</span>
+                <span className="status" style={{ float: 'right' }}>
+                  {file.processed ? '✅ Processed' : '⏳ Processing...'}
                 </span>
-                {fileInfo.filename}
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="text-sm text-gray-500 italic">No files uploaded yet</p>
         )}
       </div>
     </div>
