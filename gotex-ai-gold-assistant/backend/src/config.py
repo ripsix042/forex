@@ -6,8 +6,14 @@ load_dotenv()
 
 # API Keys
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+PINCONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINCONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
+
+# AI Provider Configuration
+DEFAULT_AI_PROVIDER = os.getenv("DEFAULT_AI_PROVIDER", "openai")  # openai, deepseek, or auto
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
 # Vector Database Configuration
 VECTOR_INDEX_NAME = os.getenv("VECTOR_INDEX_NAME", "gotex-knowledge")
